@@ -283,17 +283,18 @@
     <!-- Safe time indicator -->
     <div id="safeTimeIndicator">Safe Time: 5s</div>
 
+    <!-- Adding crossorigin attribute and using jsdelivr CDN -->
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+                "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
             }
         }
     </script>
     <script type="module">
         import * as THREE from 'three';
-
+        
         // --- Configuration ---
         const PLAYER_SPEED = 5.0;
         const PLAYER_BASE_HEIGHT = 0.1;
