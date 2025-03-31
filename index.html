@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js TPS - Enemies Attack!</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #333; }
+        canvas { display: block; }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.7); /* Slightly thicker crosshair */
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+        }
+        .uiElement {
+            position: absolute;
+            color: white;
+            font-family: sans-serif;
+            text-shadow: 1px 1px 2px black;
+             user-select: none; /* Prevent text selection */
+             z-index: 10;
+        }
+        #weaponInfo { bottom: 10px; left: 10px; font-size: 16px; }
+        #enemyInfo { bottom: 30px; left: 10px; font-size: 14px; color: lightcoral;}
+        #playerHealthInfo { bottom: 50px; left: 10px; font-size: 16px; color: lightgreen;}
+        #damageIndicator {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 0, 0, 0.5); /* Red flash */
+            opacity: 0;
+            transition: opacity 0.1s ease-out;
+            pointer-events: none;
+            z-index: 5;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: none; /* Hidden initially */
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            font-size: 3em;
+            font-family: sans-serif;
+            text-align: center;
+            z-index: 100;
+             cursor: default;
+        }
+         #gameOverScreen button {
+             font-size: 0.5em;
+             padding: 10px 20px;
+             margin-top: 20px;
+             cursor: pointer;
+         }
+         
+         /* Controls Guide styling */
+         #controlsGuide {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             width: 350px;
+             background-color: rgba(0, 0, 0, 0.8);
+             border: 2px solid #4499ff;
+             border-radius: 10px;
+             color: white;
+             padding: 20px;
+             font-family: sans-serif;
+             z-index: 90;
+             text-align: center;
+         }
+         
+         #controlsGuide h2 {
+             color: #4499ff;
+             margin-top: 0;
+         }
+         
+         #controlsGuide .section {
+             margin: 15px 0;
+             text-align: left;
+         }
+         
+         #controlsGuide .section-title {
+             font-weight: bold;
+             color: #ff8800;
+             margin-bottom: 5px;
+         }
+         
+         #controlsGuide .control-row {
+             display: flex;
+             justify-content: space-between;
+             margin: 5px 0;
+         }
+         
+         #controlsGuide .key {
+             background-color: #555;
+             border-radius: 4px;
+             padding: 2px 8px;
+             font-family: monospace;
+             font-weight: bold;
+         }
+         
+         #controlsGuide button {
+             margin-top: 15px;
+             padding: 8px 16px;
+             background-color: #4499ff;
+             border: none;
+             border-radius: 4px;
+             color: white;
+             cursor: pointer;
+         }
+         
+         #controlsGuide button:hover {
+             background-color: #66aaff;
+         }
+         
+         #toggleControlsBtn {
+             position: absolute;
+             top: 10px;
+             right: 10px;
+             background-color: rgba(0, 0, 0, 0.5);
+             color: white;
+             border: 1px solid white;
+             border-radius: 4px;
+             padding: 5px 10px;
+             cursor: pointer;
+             z-index: 15;
+         }
+         
+         /* Weapon wheel styling */
+         #weaponWheel {
+             position: absolute;
+             top: 50%;
+             left: 50%;
+             transform: translate(-50%, -50%);
+             width: 300px;
+             height: 300px;
+             background-color: rgba(0, 0, 0, 0.7);
+             border-radius: 50%;
+             border: 2px solid #4499ff;
+             display: none;
+             z-index: 50;
+         }
+         
+         .weapon-option {
+             position: absolute;
+             width: 80px;
+             height: 80px;
+             background-color: rgba(30, 30, 30, 0.8);
+             border-radius: 50%;
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+             cursor: pointer;
+             border: 2px solid transparent;
+             transition: border-color 0.2s;
+             color: white;
+             font-family: sans-serif;
+             font-weight: bold;
+         }
+         
+         .weapon-option:hover {
+             border-color: #ffcc00;
+         }
+         
+         .weapon-option.selected {
+             border-color: #ff5500;
+             background-color: rgba(60, 60, 60, 0.8);
+         }
+         
+         /* Position the weapon options in a circle */
+         #weapon0 {
+             top: 10px;
+             left: 50%;
+             transform: translateX(-50%);
+         }
+         
+         #weapon1 {
+             top: 50%;
+             right: 10px;
+             transform: translateY(-50%);
+         }
+         
+         #weapon2 {
+             bottom: 10px;
+             left: 50%;
+             transform: translateX(-50%);
+         }
+         
+         /* Safe period indicator */
+         #safeTimeIndicator {
+             position: absolute;
+             top: 40px;
+             left: 50%;
+             transform: translateX(-50%);
+             background-color: rgba(50, 200, 50, 0.7);
+             color: white;
+             padding: 5px 15px;
+             border-radius: 20px;
+             font-family: sans-serif;
+             z-index: 30;
+             display: none;
+         }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="weaponInfo" class="uiElement">Weapon: 1</div>
+    <div id="enemyInfo" class="uiElement">Enemies Left: 0</div>
+    <div id="playerHealthInfo" class="uiElement">Health: 100</div>
+    <div id="damageIndicator"></div>
+    <div id="gameOverScreen">
+        <div>GAME OVER</div>
+        <button onclick="window.location.reload()">Restart</button>
+    </div>
+    
+    <!-- Controls Guide -->
+    <div id="controlsGuide">
+        <h2>Game Controls Guide 🎮</h2>
+        
+        <div class="section">
+            <div class="section-title">🕹 Movement:</div>
+            <div class="control-row"><span class="key">W</span> <span>Move Forward</span></div>
+            <div class="control-row"><span class="key">S</span> <span>Move Backward</span></div>
+            <div class="control-row"><span class="key">A</span> <span>Move Left</span></div>
+            <div class="control-row"><span class="key">D</span> <span>Move Right</span></div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">🔫 Combat:</div>
+            <div class="control-row"><span class="key">Left Click</span> <span>Shoot 🔥</span></div>
+            <div class="control-row"><span class="key">Right Click</span> <span>Weapon Selection Wheel 🔄</span></div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">💡 Tips:</div>
+            <div>Use obstacles for cover! 🏠</div>
+            <div>Different weapons have different damage and fire rates</div>
+        </div>
+        
+        <button id="startGameBtn">Start Game</button>
+    </div>
+    
+    <button id="toggleControlsBtn" style="display: none;">Show Controls</button>
+    
+    <!-- Weapon Wheel -->
+    <div id="weaponWheel">
+        <div id="weapon0" class="weapon-option selected">
+            <div>Pistol</div>
+            <div style="font-size: 0.8em">Fast</div>
+        </div>
+        <div id="weapon1" class="weapon-option">
+            <div>Rifle</div>
+            <div style="font-size: 0.8em">Auto</div>
+        </div>
+        <div id="weapon2" class="weapon-option">
+            <div>Sniper</div>
+            <div style="font-size: 0.8em">Powerful</div>
+        </div>
+    </div>
+    
+    <!-- Safe time indicator -->
+    <div id="safeTimeIndicator">Safe Time: 5s</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Configuration ---
+        const PLAYER_SPEED = 5.0;
+        const PLAYER_BASE_HEIGHT = 0.1;
+        const PLAYER_TORSO_HEIGHT = 0.8;
+        const PLAYER_HEAD_RADIUS = 0.25;
+        const PLAYER_ARM_LENGTH = 0.6;
+        const PLAYER_LEG_LENGTH = 0.9;
+        const PLAYER_PART_WIDTH = 0.25;
+        const MAX_PLAYER_HEALTH = 100;
+        const PHYSICS_DAMPING = 0.9;
+
+        // Camera configuration
+        const FIRST_PERSON_OFFSET = 1.5; // Increased from 0.2 to see more of the player
+        const FIRST_PERSON_HEIGHT_OFFSET = 0.5; // Added to raise camera to see player better
+        const OVERVIEW_CAMERA_HEIGHT = 15; 
+        const OVERVIEW_CAMERA_DISTANCE = 0;
+        
+        // Original third-person settings
+        const CAMERA_DISTANCE = 5;
+        const CAMERA_HEIGHT_OFFSET = PLAYER_BASE_HEIGHT + PLAYER_TORSO_HEIGHT + PLAYER_HEAD_RADIUS * 0.5;
+        const CAMERA_FOLLOW_HEIGHT = 1.0;
+
+        // Health kit configuration
+        const HEALTH_KIT_HEAL_AMOUNT = 50; // Percent of health to heal
+        const HEALTH_KIT_LIFETIME = 15; // Seconds before disappearing
+
+        const MOUSE_SENSITIVITY = 0.002;
+        const BULLET_SPEED_BASE = 20;
+        const BULLET_LIFESPAN = 2;
+
+        const ENEMY_HEALTH_DEFAULT = 3;
+        const ENEMY_RADIUS = 0.4;
+        const ENEMY_HEIGHT = 1.5;
+        const ENEMY_ATTACK_RANGE = 10.0;
+        const ENEMY_ATTACK_COOLDOWN = 1.5; // seconds
+        const ENEMY_DAMAGE = 10;
+        const ENEMY_TURN_SPEED = 1.0; // Radians per second
+        const ENEMY_MOVE_SPEED = 2.5; // Movement speed
+        const ENEMY_PATROL_RADIUS = 5.0; // How far enemies will patrol from their spawn
+        const ENEMY_SIGHT_RANGE = 12.0; // How far enemies can see
+        const ENEMY_SIGHT_ANGLE = Math.PI / 2; // Field of view (90 degrees)
+        
+        // Level system
+        const LEVELS = [
+            { 
+                name: "Level 1", 
+                enemyCount: 3,
+                roomSize: 16,
+                enemiesCanSpawnRandomly: false,
+                enemyPositions: [
+                    new THREE.Vector3(-4, 0, -6),
+                    new THREE.Vector3(4, 0, -2),
+                    new THREE.Vector3(0, 0, -1)
+                ]
+            },
+            { 
+                name: "Level 2", 
+                enemyCount: 5,
+                roomSize: 16,
+                enemiesCanSpawnRandomly: false,
+                enemyPositions: [
+                    new THREE.Vector3(-4, 0, -6),
+                    new THREE.Vector3(4, 0, -2),
+                    new THREE.Vector3(0, 0, -1),
+                    new THREE.Vector3(5, 0, 5),
+                    new THREE.Vector3(-5, 0, 3)
+                ]
+            },
+            { 
+                name: "Level 3", 
+                enemyCount: 7,
+                roomSize: 20,
+                enemiesCanSpawnRandomly: true,
+                enemyPositions: [
+                    new THREE.Vector3(-4, 0, -6),
+                    new THREE.Vector3(4, 0, -2),
+                    new THREE.Vector3(0, 0, -1),
+                    new THREE.Vector3(5, 0, 5),
+                    new THREE.Vector3(-5, 0, 3),
+                    new THREE.Vector3(-2, 0, 5),
+                    new THREE.Vector3(2, 0, -5)
+                ]
+            },
+            { 
+                name: "Level 4", 
+                enemyCount: 8,
+                roomSize: 20,
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 5", 
+                enemyCount: 10,
+                roomSize: 22,
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 6", 
+                enemyCount: 12,
+                roomSize: 24,
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 7", 
+                enemyCount: 14,
+                roomSize: 26, 
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 8", 
+                enemyCount: 16,
+                roomSize: 28,
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 9", 
+                enemyCount: 18,
+                roomSize: 30,
+                enemiesCanSpawnRandomly: true
+            },
+            { 
+                name: "Level 10", 
+                enemyCount: 20,
+                roomSize: 32,
+                enemiesCanSpawnRandomly: true
+            }
+        ];
+
+        // Game State and Config
+        const SAFE_PERIOD_DURATION = 5; // 5 seconds of safety at level start
+        
+        // --- Game State ---
+        let scene, camera, renderer, clock, raycaster;
+        let overviewCamera; // New camera for room overview
+        let isOverviewMode = false; // Track if we're in overview mode
+        let playerContainer;
+        let playerTorsoMesh, playerHeadMesh;
+        let playerWeaponMesh;
+        let playerVelocity = new THREE.Vector3();
+        let playerHealth = MAX_PLAYER_HEALTH;
+        let isGameOver = false;
+        let isWeaponWheelOpen = false;
+        let isSafePeriod = false;
+        let safePeriodEndTime = 0;
+
+        let environmentMeshes = [];
+        let collisionBoxes = [];
+        let bullets = [];
+        let enemies = [];
+        let healthKits = [];
+        let keysPressed = {};
+        let isPointerLocked = false;
+        let playerDirection = new THREE.Vector3();
+        let cameraPitch = 0;
+        let cameraYaw = 0;
+        let currentLevel = 0;
+
+        const weapons = [
+            { name: "Pistol", fireRate: 0.2, bulletSpeedMultiplier: 1.0, color: 0xffff00, damage: 1 },
+            { name: "Rifle", fireRate: 0.1, bulletSpeedMultiplier: 1.5, color: 0xff8800, damage: 2 },
+            { name: "Sniper", fireRate: 1.0, bulletSpeedMultiplier: 2.5, color: 0xff00ff, damage: 5 }
+        ];
+        let currentWeaponIndex = 0;
+        let lastShotTime = 0;
+
+        // UI Elements
+        let weaponInfoElement, enemyInfoElement, playerHealthInfoElement, levelInfoElement;
+        let damageIndicatorElement, gameOverScreenElement;
+        let controlsGuideElement, toggleControlsBtn;
+        let weaponWheelElement, safeTimeIndicatorElement;
+        let gameStarted = false;
+
+        // --- Initialization ---
+        function init() {
+            clock = new THREE.Clock();
+            raycaster = new THREE.Raycaster(); // Re-use raycaster
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x555555);
+            
+            // Main camera (first-person view)
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // Setup overview camera
+            overviewCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            overviewCamera.position.set(0, OVERVIEW_CAMERA_HEIGHT, 0);
+            overviewCamera.lookAt(0, 0, 0);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Get UI Elements
+            weaponInfoElement = document.getElementById('weaponInfo');
+            enemyInfoElement = document.getElementById('enemyInfo');
+            playerHealthInfoElement = document.getElementById('playerHealthInfo');
+            damageIndicatorElement = document.getElementById('damageIndicator');
+            gameOverScreenElement = document.getElementById('gameOverScreen');
+            controlsGuideElement = document.getElementById('controlsGuide');
+            toggleControlsBtn = document.getElementById('toggleControlsBtn');
+            weaponWheelElement = document.getElementById('weaponWheel');
+            safeTimeIndicatorElement = document.getElementById('safeTimeIndicator');
+            
+            // Add level info UI
+            levelInfoElement = document.createElement('div');
+            levelInfoElement.id = 'levelInfo';
+            levelInfoElement.className = 'uiElement';
+            levelInfoElement.style.top = '10px';
+            levelInfoElement.style.left = '10px';
+            levelInfoElement.style.fontSize = '18px';
+            levelInfoElement.style.color = '#ffdd66';
+            document.body.appendChild(levelInfoElement);
+
+            setupLighting();
+            createPlayer();
+            setupInitialEnvironment(); // Changed to setupInitialEnvironment
+            setupWeaponWheel();
+            loadLevel(currentLevel);
+
+            setupControls();
+            updateWeaponInfo();
+            updateEnemyInfo();
+            updatePlayerHealthUI();
+            updateLevelInfo();
+
+            // Setup controls guide interactions
+            document.getElementById('startGameBtn').addEventListener('click', startGame);
+            toggleControlsBtn.addEventListener('click', toggleControlsGuide);
+
+            // Update control guide for J and K keys
+            updateControlsGuide();
+
+            updateCamera(true);
+            animate();
+        }
+
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 15, 7.5);
+            directionalLight.castShadow = true;
+            // Shadow map settings (copied from previous versions)
+            directionalLight.shadow.mapSize.width = 1024; directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -15; directionalLight.shadow.camera.right = 15;
+            directionalLight.shadow.camera.top = 15; directionalLight.shadow.camera.bottom = -15;
+            scene.add(directionalLight);
+        }
+
+        function createPlayer() {
+            playerContainer = new THREE.Group();
+            playerContainer.position.set(0, 0, 5);
+            playerContainer.userData.isPlayer = true; // Mark container
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4499ff }); // More distinct blue
+            const limbMat = new THREE.MeshStandardMaterial({ color: 0x2266aa });
+
+            // Helper to mark parts for raycasting checks
+            const markAsPlayerPart = (mesh) => {
+                 mesh.userData.isPlayerPart = true;
+                 mesh.castShadow = true;
+            };
+
+            // Torso
+            const torsoGeo = new THREE.BoxGeometry(PLAYER_PART_WIDTH * 1.5, PLAYER_TORSO_HEIGHT, PLAYER_PART_WIDTH);
+            playerTorsoMesh = new THREE.Mesh(torsoGeo, bodyMat);
+            playerTorsoMesh.position.y = PLAYER_BASE_HEIGHT + PLAYER_TORSO_HEIGHT / 2;
+            markAsPlayerPart(playerTorsoMesh);
+            playerContainer.add(playerTorsoMesh);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(PLAYER_HEAD_RADIUS, 16, 12);
+            playerHeadMesh = new THREE.Mesh(headGeo, bodyMat);
+            playerHeadMesh.position.y = playerTorsoMesh.position.y + PLAYER_TORSO_HEIGHT / 2 + PLAYER_HEAD_RADIUS * 0.9;
+            markAsPlayerPart(playerHeadMesh);
+            playerContainer.add(playerHeadMesh);
+
+            // Arms
+            const armGeo = new THREE.BoxGeometry(PLAYER_PART_WIDTH * 0.8, PLAYER_ARM_LENGTH, PLAYER_PART_WIDTH * 0.8);
+            const leftArm = new THREE.Mesh(armGeo, limbMat); markAsPlayerPart(leftArm);
+            const rightArm = new THREE.Mesh(armGeo, limbMat); markAsPlayerPart(rightArm);
+            const armY = playerTorsoMesh.position.y + PLAYER_TORSO_HEIGHT * 0.3; const armX = PLAYER_PART_WIDTH;
+            leftArm.position.set(-armX, armY, 0); rightArm.position.set(armX, armY, 0);
+            leftArm.rotation.z = THREE.MathUtils.degToRad(20); rightArm.rotation.z = THREE.MathUtils.degToRad(-20);
+            leftArm.rotation.x = THREE.MathUtils.degToRad(-10); rightArm.rotation.x = THREE.MathUtils.degToRad(-10);
+            playerContainer.add(leftArm); playerContainer.add(rightArm);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(PLAYER_PART_WIDTH, PLAYER_LEG_LENGTH, PLAYER_PART_WIDTH);
+            const leftLeg = new THREE.Mesh(legGeo, limbMat); markAsPlayerPart(leftLeg);
+            const rightLeg = new THREE.Mesh(legGeo, limbMat); markAsPlayerPart(rightLeg);
+            const legY = PLAYER_BASE_HEIGHT + PLAYER_LEG_LENGTH / 2; const legX = PLAYER_PART_WIDTH * 0.5;
+            leftLeg.position.set(-legX, legY, 0); rightLeg.position.set(legX, legY, 0);
+            playerContainer.add(leftLeg); playerContainer.add(rightLeg);
+
+            // --- Stylized/Chunky Weapon Model ---
+            playerWeaponMesh = new THREE.Group();
+            const weaponMat = new THREE.MeshStandardMaterial({ color: 0x555555 }); // Slightly lighter grey
+            // Chunky barrel and body
+            const barrelGeo = new THREE.BoxGeometry(0.15, 0.15, 0.6);
+            const bodyGeo = new THREE.BoxGeometry(0.25, 0.2, 0.25);
+            const weaponBody = new THREE.Mesh(bodyGeo, weaponMat); markAsPlayerPart(weaponBody); // Mark weapon too
+            const weaponBarrel = new THREE.Mesh(barrelGeo, weaponMat); markAsPlayerPart(weaponBarrel);
+            weaponBarrel.position.z = 0.4; // Barrel extends forward from center of group
+            weaponBody.position.z = -0.05; // Body slightly behind center
+
+            playerWeaponMesh.add(weaponBody); playerWeaponMesh.add(weaponBarrel);
+            playerWeaponMesh.position.set(0, armY - 0.05, PLAYER_PART_WIDTH * 0.4); // Position near hands, slightly forward
+            playerWeaponMesh.rotation.x = THREE.MathUtils.degToRad(-5); // Less angle
+            playerContainer.add(playerWeaponMesh);
+            // --------------------
+
+            scene.add(playerContainer);
+            playerContainer.userData.boundingBox = new THREE.Box3(); // For player movement collision
+        }
+
+         function createEnemy(position) {
+            const enemyGroup = new THREE.Group();
+            
+            // Main body color
+            const enemyMatAlive = new THREE.MeshStandardMaterial({ color: 0xff4444 }); // Red
+            const enemyMatDead = new THREE.MeshStandardMaterial({ color: 0x666666 }); // Darker Grey when dead
+            const limbMatAlive = new THREE.MeshStandardMaterial({ color: 0xcc3333 }); // Darker red for limbs
+            
+            // Torso
+            const torsoGeo = new THREE.BoxGeometry(ENEMY_RADIUS * 1.5, ENEMY_HEIGHT * 0.5, ENEMY_RADIUS);
+            const torsoMesh = new THREE.Mesh(torsoGeo, enemyMatAlive);
+            torsoMesh.position.y = ENEMY_HEIGHT * 0.35;
+            torsoMesh.castShadow = true;
+            enemyGroup.add(torsoMesh);
+            
+            // Head
+            const headGeo = new THREE.SphereGeometry(ENEMY_RADIUS * 0.6, 12, 8);
+            const headMesh = new THREE.Mesh(headGeo, enemyMatAlive);
+            headMesh.position.y = ENEMY_HEIGHT * 0.75;
+            headMesh.castShadow = true;
+            enemyGroup.add(headMesh);
+            
+            // Arms
+            const armGeo = new THREE.BoxGeometry(ENEMY_RADIUS * 0.4, ENEMY_HEIGHT * 0.45, ENEMY_RADIUS * 0.4);
+            const leftArm = new THREE.Mesh(armGeo, limbMatAlive);
+            const rightArm = new THREE.Mesh(armGeo, limbMatAlive);
+            
+            // Position arms on sides of torso
+            leftArm.position.set(-ENEMY_RADIUS * 1.1, ENEMY_HEIGHT * 0.4, 0);
+            rightArm.position.set(ENEMY_RADIUS * 1.1, ENEMY_HEIGHT * 0.4, 0);
+            
+            // Slight angle for arms
+            leftArm.rotation.z = THREE.MathUtils.degToRad(15);
+            rightArm.rotation.z = THREE.MathUtils.degToRad(-15);
+            
+            leftArm.castShadow = true;
+            rightArm.castShadow = true;
+            enemyGroup.add(leftArm);
+            enemyGroup.add(rightArm);
+            
+            // Legs
+            const legGeo = new THREE.BoxGeometry(ENEMY_RADIUS * 0.5, ENEMY_HEIGHT * 0.5, ENEMY_RADIUS * 0.5);
+            const leftLeg = new THREE.Mesh(legGeo, limbMatAlive);
+            const rightLeg = new THREE.Mesh(legGeo, limbMatAlive);
+            
+            // Position legs
+            leftLeg.position.set(-ENEMY_RADIUS * 0.5, ENEMY_HEIGHT * 0.05, 0);
+            rightLeg.position.set(ENEMY_RADIUS * 0.5, ENEMY_HEIGHT * 0.05, 0);
+            
+            leftLeg.castShadow = true;
+            rightLeg.castShadow = true;
+            enemyGroup.add(leftLeg);
+            enemyGroup.add(rightLeg);
+            
+            // Direction indicator (nose)
+            const noseGeo = new THREE.BoxGeometry(0.1, 0.1, 0.4);
+            const noseMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+            const noseMesh = new THREE.Mesh(noseGeo, noseMat);
+            noseMesh.position.set(0, ENEMY_HEIGHT * 0.75, ENEMY_RADIUS * 0.6);
+            enemyGroup.add(noseMesh);
+
+            // Set position for the entire group
+            enemyGroup.position.copy(position);
+            enemyGroup.position.y = 0; // Base at ground level
+            enemyGroup.userData.isEnemy = true;
+            enemyGroup.castShadow = true;
+            enemyGroup.receiveShadow = true;
+            
+            // Create a bounding box for collision detection
+            const boundingBox = new THREE.Box3().setFromObject(enemyGroup);
+
+            const enemyData = {
+                mesh: enemyGroup,
+                torsoMesh: torsoMesh, // Store references to individual parts for animation
+                leftArm: leftArm,
+                rightArm: rightArm,
+                leftLeg: leftLeg,
+                rightLeg: rightLeg,
+                health: ENEMY_HEALTH_DEFAULT,
+                boundingBox: boundingBox,
+                isAlive: true,
+                materialAlive: enemyMatAlive,
+                materialDead: enemyMatDead,
+                lastAttackTime: 0, // For attack cooldown
+                spawnPosition: position.clone(), // Store original spawn point
+                targetPosition: position.clone(), // Current patrol target
+                patrolTimer: Math.random() * Math.PI * 2, // Randomized starting phase
+                state: 'patrol', // Current AI state: 'patrol', 'chase', 'attack'
+                lastStateChange: 0, // When did the enemy last change state
+                canSeePlayer: false, // Whether player is in FOV
+                walkCycle: 0 // For walking animation
+            };
+            enemies.push(enemyData);
+            scene.add(enemyGroup);
+        }
+
+        // Updated to setupInitialEnvironment
+        function setupInitialEnvironment() {
+            // Ground
+            const groundGeo = new THREE.PlaneGeometry(40, 40);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+            ground.name = 'ground';
+            scene.add(ground);
+            environmentMeshes.push(ground); // Add ground for raycast checks
+
+            const obstacleMat = new THREE.MeshStandardMaterial({ color: 0xcc6633 });
+            const addObstacle = (w, h, d, x, y, z) => {
+                const obsGeo = new THREE.BoxGeometry(w, h, d);
+                const obsMesh = new THREE.Mesh(obsGeo, obstacleMat);
+                obsMesh.position.set(x, y + h / 2, z);
+                obsMesh.castShadow = true; obsMesh.receiveShadow = true;
+                const box = new THREE.Box3().setFromObject(obsMesh);
+                collisionBoxes.push(box); // For player movement collision
+                environmentMeshes.push(obsMesh); // For raycast collision
+                scene.add(obsMesh);
+                return obsMesh;
+            };
+
+            // Create a more navigable maze layout
+            const wallH = 2.5; // Slightly lower walls
+            const wallT = 0.5; 
+            const roomW = 16; // Larger room
+            const roomD = 20;
+            
+            // Outer walls
+            addObstacle(roomW + wallT, wallH, wallT, 0, 0, -roomD / 2); 
+            addObstacle(roomW + wallT, wallH, wallT, 0, 0, roomD / 2);
+            addObstacle(wallT, wallH, roomD, -roomW / 2, 0, 0); 
+            addObstacle(wallT, wallH, roomD, roomW / 2, 0, 0);
+            
+            // Create a maze with clear pathways
+            const cs = 2.0; // Obstacle size
+            
+            // Left side obstacles
+            addObstacle(cs*2, wallH, cs, -5, 0, -7);
+            addObstacle(cs, wallH, cs*2, -7, 0, -3);
+            
+            // Right side obstacles
+            addObstacle(cs*2, wallH, cs, 5, 0, -5);
+            addObstacle(cs, wallH, cs*3, 7, 0, 0);
+            
+            // Center obstacles with pathways
+            addObstacle(cs*3, wallH, cs, 0, 0, -roomD/4);
+            addObstacle(cs*3, wallH, cs, 0, 0, roomD/4);
+            
+            // Additional obstacles for cover
+            addObstacle(cs, wallH, cs, -4, 0, 4);
+            addObstacle(cs, wallH, cs, 4, 0, 5);
+            
+            // Mark spawn point for player
+            playerContainer.position.set(0, 0, roomD/2 - 2);
+        }
+
+        // Create a health kit at the given position
+        function createHealthKit(position) {
+            const healthKitGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const healthKitMat = new THREE.MeshStandardMaterial({ color: 0x22ff22 }); // Green for health
+            const healthKitMesh = new THREE.Mesh(healthKitGeo, healthKitMat);
+            
+            // Position slightly above ground
+            healthKitMesh.position.copy(position);
+            healthKitMesh.position.y = 0.25; // Half height
+            
+            // Add a red cross on top
+            const crossMat = new THREE.MeshStandardMaterial({ color: 0xff2222 });
+            const crossVert = new THREE.BoxGeometry(0.1, 0.1, 0.3);
+            const crossHorz = new THREE.BoxGeometry(0.3, 0.1, 0.1);
+            const crossVertMesh = new THREE.Mesh(crossVert, crossMat);
+            const crossHorzMesh = new THREE.Mesh(crossHorz, crossMat);
+            crossVertMesh.position.y = 0.26;
+            crossHorzMesh.position.y = 0.26;
+            healthKitMesh.add(crossVertMesh);
+            healthKitMesh.add(crossHorzMesh);
+            
+            // Add slight rotation animation
+            healthKitMesh.userData.rotationSpeed = 1;
+            healthKitMesh.userData.bob = 0;
+            healthKitMesh.userData.createdAt = clock.getElapsedTime();
+            
+            scene.add(healthKitMesh);
+            
+            // Add to healthKits array with bounding box
+            const boundingBox = new THREE.Box3().setFromObject(healthKitMesh);
+            healthKits.push({
+                mesh: healthKitMesh,
+                boundingBox: boundingBox,
+                createdAt: clock.getElapsedTime()
+            });
+        }
+        
+        // Heal the player
+        function healPlayer() {
+            if (playerHealth >= 100) return; // Already at max health
+            
+            // Add 50% of health, capped at 100
+            const newHealth = Math.min(100, playerHealth + HEALTH_KIT_HEAL_AMOUNT);
+            playerHealth = newHealth;
+            updatePlayerHealthUI();
+            
+            // Add visual effect or sound
+            console.log(`Player healed! New health: ${playerHealth}`);
+        }
+        
+        // Handle death animation and health kit spawn
+        function handleEnemyDeath(enemy) {
+            // Mark enemy as dead
+            enemy.isAlive = false;
+            
+            // Change appearance
+            enemy.mesh.material = enemy.materialDead;
+            
+            // Start death animation
+            enemy.deathTime = clock.getElapsedTime();
+            enemy.isDisintegrating = true;
+            
+            // Update UI
+            updateEnemyInfo();
+            console.log("Enemy died!");
+            
+            // Create a health kit drop
+            createHealthKit(enemy.mesh.position.clone());
+        }
+        
+        // Load a specific level
+        function loadLevel(levelIndex) {
+            // Clear any existing enemies
+            enemies.forEach(enemy => {
+                if (enemy.mesh) scene.remove(enemy.mesh);
+            });
+            enemies = [];
+            
+            // Clear any existing health kits
+            healthKits.forEach(kit => {
+                if (kit.mesh) scene.remove(kit.mesh);
+            });
+            healthKits = [];
+            
+            // Clear existing environment objects
+            environmentMeshes.forEach(mesh => {
+                if (mesh !== scene.getObjectByName('ground')) {
+                    scene.remove(mesh);
+                }
+            });
+            // Reset arrays but keep ground
+            const ground = environmentMeshes.find(mesh => mesh.name === 'ground');
+            environmentMeshes = ground ? [ground] : [];
+            collisionBoxes = [];
+            
+            // Make sure level index is valid
+            if (levelIndex >= LEVELS.length) {
+                // Game completed
+                console.log("All levels completed!");
+                // TODO: Show victory screen
+                return;
+            }
+            
+            // Get level config
+            const level = LEVELS[levelIndex];
+            
+            // Create environment for this level
+            setupInitialEnvironment();
+            
+            // Spawn enemies for this level
+            if (level.enemiesCanSpawnRandomly) {
+                // Spawn randomly
+                spawnRandomEnemies(level.enemyCount, level.roomSize);
+            } else {
+                // Spawn at predefined positions
+                level.enemyPositions.forEach(pos => {
+                    createEnemy(pos);
+                });
+            }
+            
+            // Update level info UI
+            updateLevelInfo();
+            updateEnemyInfo();
+            
+            // Reset player to starting position and clear velocity
+            // Calculate a safe spawn position that's definitely inside the room
+            const safeSpawnDistance = Math.min(level.roomSize/2 - 3, 8); // At least 3 units from wall, max 8 units
+            playerContainer.position.set(0, 0, safeSpawnDistance);
+            playerVelocity.set(0, 0, 0);
+            playerHealth = MAX_PLAYER_HEALTH;
+            updatePlayerHealthUI();
+            
+            // Start safe period
+            startSafePeriod();
+        }
+        
+        // Spawn enemies at random valid positions
+        function spawnRandomEnemies(count, roomSize) {
+            const roomRadius = Math.min(roomSize / 2 - 3, roomSize / 2 * 0.8); // Keep further from walls, max 80% of room radius
+            const minDistanceFromPlayer = 5; // Minimum distance from player spawn
+            const minDistanceBetweenEnemies = ENEMY_RADIUS * 4; // Keep enemies from spawning too close
+            
+            const spawnPositions = [];
+            const playerSpawnPos = new THREE.Vector3(0, 0, Math.min(roomSize/2 - 3, 8));
+            
+            // Try to place the required number of enemies
+            for (let i = 0; i < count; i++) {
+                let validPosition = false;
+                let attempts = 0;
+                let position;
+                
+                // Try up to 50 times to find a valid position
+                while (!validPosition && attempts < 50) {
+                    // Random position within room
+                    const angle = Math.random() * Math.PI * 2;
+                    // Use a range from 20% to 80% of room radius to avoid walls and center
+                    const radius = (0.2 + Math.random() * 0.6) * roomRadius;
+                    position = new THREE.Vector3(
+                        Math.cos(angle) * radius, 
+                        0, 
+                        Math.sin(angle) * radius
+                    );
+                    
+                    // Check if too close to player spawn
+                    if (position.distanceTo(playerSpawnPos) < minDistanceFromPlayer) {
+                        attempts++;
+                        continue;
+                    }
+                    
+                    // Check if too close to other enemies
+                    let tooClose = false;
+                    for (const existingPos of spawnPositions) {
+                        if (position.distanceTo(existingPos) < minDistanceBetweenEnemies) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!tooClose) {
+                        // Check if position collides with obstacles
+                        // Create temporary bounding box
+                        const tempBox = new THREE.Box3(
+                            new THREE.Vector3(position.x - ENEMY_RADIUS, 0, position.z - ENEMY_RADIUS),
+                            new THREE.Vector3(position.x + ENEMY_RADIUS, ENEMY_HEIGHT, position.z + ENEMY_RADIUS)
+                        );
+                        
+                        let collides = false;
+                        for (const objBox of collisionBoxes) {
+                            if (tempBox.intersectsBox(objBox)) {
+                                collides = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!collides) {
+                            validPosition = true;
+                        }
+                    }
+                    
+                    attempts++;
+                }
+                
+                if (validPosition) {
+                    spawnPositions.push(position);
+                    createEnemy(position);
+                }
+            }
+            
+            console.log(`Spawned ${spawnPositions.length} enemies randomly`);
+        }
+        
+        // Set up weapon wheel interaction
+        function setupWeaponWheel() {
+            // Add event listeners for each weapon option
+            for (let i = 0; i < weapons.length; i++) {
+                const weaponOption = document.getElementById(`weapon${i}`);
+                weaponOption.addEventListener('click', () => {
+                    selectWeapon(i);
+                });
+                
+                // Add hover listener to highlight options
+                weaponOption.addEventListener('mouseover', () => {
+                    weaponOption.classList.add('hovered');
+                });
+                
+                weaponOption.addEventListener('mouseout', () => {
+                    weaponOption.classList.remove('hovered');
+                });
+            }
+        }
+        
+        // Select a weapon from the wheel
+        function selectWeapon(index) {
+            if (index >= 0 && index < weapons.length) {
+                // Update UI
+                document.querySelectorAll('.weapon-option').forEach(option => {
+                    option.classList.remove('selected');
+                });
+                document.getElementById(`weapon${index}`).classList.add('selected');
+                
+                // Set the current weapon
+                currentWeaponIndex = index;
+                updateWeaponInfo();
+                
+                // Close the weapon wheel
+                closeWeaponWheel();
+            }
+        }
+        
+        // Open the weapon wheel
+        function openWeaponWheel() {
+            if (isGameOver || !gameStarted) return;
+            
+            isWeaponWheelOpen = true;
+            weaponWheelElement.style.display = 'block';
+            
+            // Release pointer lock to allow mouse interaction with wheel
+            if (document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+        }
+        
+        // Close the weapon wheel
+        function closeWeaponWheel() {
+            isWeaponWheelOpen = false;
+            weaponWheelElement.style.display = 'none';
+            
+            // Re-acquire pointer lock if the game is active
+            if (gameStarted && !isGameOver) {
+                document.body.requestPointerLock();
+            }
+        }
+
+        // Start safe period
+        function startSafePeriod() {
+            isSafePeriod = true;
+            safePeriodEndTime = clock.getElapsedTime() + SAFE_PERIOD_DURATION;
+            safeTimeIndicatorElement.style.display = 'block';
+        }
+        
+        // Update safe period timer
+        function updateSafePeriod() {
+            if (!isSafePeriod) return;
+            
+            const now = clock.getElapsedTime();
+            const timeRemaining = Math.max(0, safePeriodEndTime - now);
+            
+            if (timeRemaining <= 0) {
+                // End safe period
+                isSafePeriod = false;
+                safeTimeIndicatorElement.style.display = 'none';
+            } else {
+                // Update countdown
+                safeTimeIndicatorElement.textContent = `Safe Time: ${timeRemaining.toFixed(1)}s`;
+            }
+        }
+
+        // --- Controls ---
+        function setupControls() {
+            document.addEventListener('keydown', (event) => { 
+                if (!isGameOver && gameStarted && !isWeaponWheelOpen) keysPressed[event.code] = true; 
+                
+                // H key toggles controls guide
+                if (event.code === 'KeyH' && gameStarted) {
+                    toggleControlsGuide();
+                }
+                
+                // J key for weapon wheel
+                if (event.code === 'KeyJ' && gameStarted && !isGameOver) {
+                    if (isWeaponWheelOpen) {
+                        closeWeaponWheel();
+                    } else {
+                        openWeaponWheel();
+                    }
+                }
+                
+                // K key for overview camera
+                if (event.code === 'KeyK' && gameStarted && !isGameOver && !isWeaponWheelOpen) {
+                    isOverviewMode = true;
+                }
+                
+                // R key to reset/unstuck player
+                if (event.code === 'KeyR' && gameStarted && !isGameOver) {
+                    resetPlayerPosition();
+                }
+                
+                // Escape key to close weapon wheel
+                if (event.code === 'Escape' && isWeaponWheelOpen) {
+                    closeWeaponWheel();
+                }
+            });
+            
+            document.addEventListener('keyup', (event) => { 
+                keysPressed[event.code] = false; 
+                
+                // Release K key - return to first person
+                if (event.code === 'KeyK' && gameStarted && !isGameOver) {
+                    isOverviewMode = false;
+                }
+            }); 
+            
+            document.addEventListener('pointerlockchange', () => { 
+                isPointerLocked = document.pointerLockElement === document.body; 
+            });
+
+            document.addEventListener('mousemove', (event) => {
+                if (!isPointerLocked || isGameOver || !gameStarted || isOverviewMode || isWeaponWheelOpen) return;
+                cameraYaw -= event.movementX * MOUSE_SENSITIVITY;
+                playerContainer.rotation.y = cameraYaw;
+                // No cameraPitch adjustment in first-person mode
+            });
+
+            document.body.addEventListener('click', (event) => {
+                if (isGameOver || !gameStarted || isOverviewMode) return;
+                
+                if (isWeaponWheelOpen) {
+                    // When weapon wheel is open, clicks are handled by the wheel UI
+                    return;
+                }
+                
+                if (!isPointerLocked) document.body.requestPointerLock();
+                else shoot();
+            });
+            
+            // Disable right-click event for weapon wheel - now using J key
+            document.addEventListener('contextmenu', (event) => {
+                event.preventDefault(); // Prevent context menu
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (isGameOver || !gameStarted || isWeaponWheelOpen) return;
+                if (event.code.startsWith('Digit')) {
+                    const index = parseInt(event.key) - 1;
+                    if (index >= 0 && index < weapons.length) {
+                        currentWeaponIndex = index;
+                        updateWeaponInfo();
+                    }
+                }
+            });
+        }
+
+        // Function to reset player position when stuck
+        function resetPlayerPosition() {
+            console.log("Player position reset requested");
+            const level = LEVELS[currentLevel];
+            const safePos = new THREE.Vector3(0, 0, level.roomSize/2 - 2);
+            playerContainer.position.copy(safePos);
+            playerVelocity.set(0, 0, 0);
+        }
+
+        // --- UI Update Functions ---
+        function updateWeaponInfo() { weaponInfoElement.textContent = `Weapon: ${currentWeaponIndex + 1} (${weapons[currentWeaponIndex].name})`; }
+        function updateEnemyInfo() {
+             const aliveEnemies = enemies.filter(e => e.isAlive).length;
+             enemyInfoElement.textContent = `Enemies Left: ${aliveEnemies}`;
+         }
+         function updatePlayerHealthUI() {
+              playerHealthInfoElement.textContent = `Health: ${playerHealth}`;
+              playerHealthInfoElement.style.color = playerHealth > 30 ? 'lightgreen' : 'coral';
+          }
+
+         function showDamageIndicator() {
+             damageIndicatorElement.style.opacity = '1';
+             setTimeout(() => { damageIndicatorElement.style.opacity = '0'; }, 150); // Fade out quickly
+         }
+
+         function triggerGameOver() {
+             if (isGameOver) return; // Prevent multiple triggers
+             isGameOver = true;
+             console.log("GAME OVER");
+             if (document.pointerLockElement) {
+                 document.exitPointerLock(); // Release pointer lock
+             }
+             gameOverScreenElement.style.display = 'flex'; // Show game over screen
+              // Stop animation? Optionally, could just prevent updates in animate()
+         }
+
+        // --- Player Damage ---
+         function playerTakeDamage(damage) {
+             if (isGameOver) return;
+             playerHealth -= damage;
+             playerHealth = Math.max(0, playerHealth); // Clamp health at 0
+             console.log(`Player took ${damage} damage. Health: ${playerHealth}`);
+             updatePlayerHealthUI();
+             showDamageIndicator();
+             if (playerHealth <= 0) {
+                 triggerGameOver();
+             }
+         }
+
+
+        // --- Shooting ---
+        function shoot() {
+             if (isGameOver) return;
+            const now = clock.getElapsedTime();
+            const weapon = weapons[currentWeaponIndex];
+            if (now - lastShotTime < weapon.fireRate) return;
+            lastShotTime = now;
+
+            const bulletGeo = new THREE.SphereGeometry(0.1, 8, 8);
+            const bulletMat = new THREE.MeshBasicMaterial({ color: weapon.color });
+            const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+
+            const barrelTipLocal = new THREE.Vector3(0, 0, 0.3); // Barrel tip local pos
+            const spawnPosWorld = playerWeaponMesh.localToWorld(barrelTipLocal.clone());
+            bullet.position.copy(spawnPosWorld);
+
+            const bulletVelocity = new THREE.Vector3();
+            camera.getWorldDirection(bulletVelocity);
+            bulletVelocity.multiplyScalar(BULLET_SPEED_BASE * weapon.bulletSpeedMultiplier);
+
+            bullet.userData = { velocity: bulletVelocity, createdAt: now, boundingBox: new THREE.Box3().setFromObject(bullet), damage: weapon.damage }; // Add damage
+            bullets.push(bullet);
+            scene.add(bullet);
+        }
+
+        // --- Game Loop ---
+        function animate() {
+             if (isGameOver) {
+                  requestAnimationFrame(animate);
+                  renderer.render(scene, camera);
+                  return;
+             }
+
+            requestAnimationFrame(animate);
+            const deltaTime = clock.getDelta();
+
+            if (gameStarted) {
+                updatePlayerMovement(deltaTime);
+                updateBullets(deltaTime);
+                updateEnemies(deltaTime);
+                updateHealthKits(deltaTime);
+                updateCamera();
+            }
+
+            // Render with the appropriate camera
+            if (isOverviewMode) {
+                renderer.render(scene, overviewCamera);
+            } else {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // --- Update Functions ---
+        function updatePlayerMovement(deltaTime) {
+             if (isGameOver || isOverviewMode || isWeaponWheelOpen) return; // No movement in overview mode or when weapon wheel is open
+             if (!playerContainer || !playerTorsoMesh) return;
+
+            const moveDirection = new THREE.Vector3(); 
+            const rightDirection = new THREE.Vector3();
+            
+            // Get the current looking direction
+            playerContainer.getWorldDirection(moveDirection); 
+            moveDirection.y = 0; 
+            moveDirection.normalize();
+            
+            // Get the right direction relative to looking direction
+            rightDirection.crossVectors(playerContainer.up, moveDirection).normalize();
+
+            let commandedVelocity = new THREE.Vector3();
+            
+            // Fixed movement direction - W moves forward in direction player is facing
+            if (keysPressed['KeyW']) commandedVelocity.add(moveDirection);
+            if (keysPressed['KeyS']) commandedVelocity.sub(moveDirection); 
+            if (keysPressed['KeyA']) commandedVelocity.add(rightDirection); // Left is correct
+            if (keysPressed['KeyD']) commandedVelocity.sub(rightDirection); // Right is correct
+
+            if (commandedVelocity.lengthSq() > 0) commandedVelocity.normalize().multiplyScalar(PLAYER_SPEED);
+            playerVelocity.lerp(commandedVelocity, 0.1); 
+            playerVelocity.multiplyScalar(PHYSICS_DAMPING);
+
+            // --- IMPROVED COLLISION DETECTION ---
+            if (playerVelocity.lengthSq() > 0.001) {
+                // Update player bounding box
+                playerContainer.updateMatrixWorld(true);
+                const playerBox = playerContainer.userData.boundingBox;
+                const torsoBox = new THREE.Box3().setFromObject(playerTorsoMesh, true);
+                const headBox = new THREE.Box3().setFromObject(playerHeadMesh, true);
+                playerBox.copy(torsoBox).union(headBox); // Combine torso/head for collision box
+
+                // Check if player is currently stuck in a wall
+                let currentlyStuck = false;
+                for (const objBox of collisionBoxes) {
+                    if (playerBox.intersectsBox(objBox)) {
+                        currentlyStuck = true;
+                        break;
+                    }
+                }
+
+                // If stuck, try to push player out of the wall
+                if (currentlyStuck) {
+                    console.log("Player stuck in wall, attempting to fix...");
+                    
+                    // Try pushing in various directions to get unstuck
+                    const pushDirections = [
+                        new THREE.Vector3(1, 0, 0),
+                        new THREE.Vector3(-1, 0, 0),
+                        new THREE.Vector3(0, 0, 1),
+                        new THREE.Vector3(0, 0, -1),
+                        new THREE.Vector3(1, 0, 1).normalize(),
+                        new THREE.Vector3(1, 0, -1).normalize(),
+                        new THREE.Vector3(-1, 0, 1).normalize(),
+                        new THREE.Vector3(-1, 0, -1).normalize()
+                    ];
+                    
+                    for (const pushDir of pushDirections) {
+                        // Try pushing player out in this direction
+                        const testPos = playerContainer.position.clone().add(pushDir);
+                        playerContainer.position.copy(testPos);
+                        
+                        // Update bounding box at test position
+                        playerContainer.updateMatrixWorld(true);
+                        const testBox = new THREE.Box3().setFromObject(playerTorsoMesh, true)
+                            .union(new THREE.Box3().setFromObject(playerHeadMesh, true));
+                        
+                        // Check if still stuck
+                        let stillStuck = false;
+                        for (const objBox of collisionBoxes) {
+                            if (testBox.intersectsBox(objBox)) {
+                                stillStuck = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!stillStuck) {
+                            // We found a way out!
+                            console.log("Successfully pushed player out of wall");
+                            return; // Exit function as we've fixed the issue
+                        } else {
+                            // Reset position and try next direction
+                            playerContainer.position.sub(pushDir);
+                        }
+                    }
+                    
+                    // If we're still stuck after trying all directions, teleport player to safety
+                    console.log("Could not push player out, teleporting to safety");
+                    playerContainer.position.set(0, 0, 5); // Teleport to a safe location
+                    playerVelocity.set(0, 0, 0); // Reset velocity
+                    return;
+                }
+
+                // Normal movement with improved collision detection
+                const deltaPos = playerVelocity.clone().multiplyScalar(deltaTime);
+                const nextPos = playerContainer.position.clone().add(deltaPos);
+                
+                // Update player bounding box at potential next position
+                const potentialBox = playerBox.clone().translate(deltaPos);
+                
+                // Check for collisions with environment
+                let collisionX = false, collisionZ = false;
+                for (const objBox of collisionBoxes) {
+                    if (potentialBox.intersectsBox(objBox)) {
+                        // Try moving on each axis separately to allow sliding along walls
+                        const boxX = playerBox.clone().translate(new THREE.Vector3(deltaPos.x, 0, 0));
+                        if (boxX.intersectsBox(objBox)) collisionX = true;
+                        
+                        const boxZ = playerBox.clone().translate(new THREE.Vector3(0, 0, deltaPos.z));
+                        if (boxZ.intersectsBox(objBox)) collisionZ = true;
+                        
+                        if (collisionX && collisionZ) break;
+                    }
+                }
+                
+                // Apply velocity with collision response
+                if (collisionX) playerVelocity.x = 0;
+                if (collisionZ) playerVelocity.z = 0;
+                
+                // Move player
+                playerContainer.position.add(playerVelocity.clone().multiplyScalar(deltaTime));
+            }
+            
+            // Keep player on the ground
+            playerContainer.position.y = 0;
+        }
+
+        function updateBullets(deltaTime) {
+             if (isGameOver) return;
+            const now = clock.getElapsedTime(); 
+            let enemyInfoNeedsUpdate = false;
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i]; const userData = bullet.userData;
+                bullet.position.add(userData.velocity.clone().multiplyScalar(deltaTime));
+                userData.boundingBox.setFromObject(bullet);
+
+                if (now - userData.createdAt > BULLET_LIFESPAN) { scene.remove(bullet); bullets.splice(i, 1); continue; }
+
+                let hit = false;
+                // Env collision
+                for (const objBox of collisionBoxes) { if (userData.boundingBox.intersectsBox(objBox)) { hit = true; break; } }
+                if (hit) { scene.remove(bullet); bullets.splice(i, 1); continue; }
+
+                // Enemy collision
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    if (!enemy.isAlive) continue;
+                    if (userData.boundingBox.intersectsBox(enemy.boundingBox)) {
+                        hit = true;
+                        enemy.health -= userData.damage; // Use weapon damage
+                        if (enemy.health <= 0) {
+                            handleEnemyDeath(enemy);
+                            enemyInfoNeedsUpdate = true;
+                        } else { 
+                            console.log("Enemy hit! Health:", enemy.health); 
+                        }
+                        break;
+                    }
+                }
+                if (hit) { scene.remove(bullet); bullets.splice(i, 1); }
+            }
+            if (enemyInfoNeedsUpdate) {
+                updateEnemyInfo();
+                // Check if level is complete
+                checkLevelComplete();
+            }
+        }
+
+        function updateEnemies(deltaTime) {
+             if (isGameOver) return;
+             const now = clock.getElapsedTime();
+             
+             // Update safe period timer
+             updateSafePeriod();
+             
+             const playerWorldPos = new THREE.Vector3();
+             playerContainer.getWorldPosition(playerWorldPos); // Get player position once
+
+             enemies.forEach(enemy => {
+                 // Skip if enemy is dead
+                 if (!enemy.isAlive) {
+                     // Handle disintegration animation
+                     if (enemy.isDisintegrating) {
+                         const timeSinceDeath = now - enemy.deathTime;
+                         if (timeSinceDeath < 2.0) {
+                             // Scale down over time
+                             const scale = Math.max(0, 1 - timeSinceDeath / 2);
+                             enemy.mesh.scale.set(scale, scale, scale);
+                             
+                             // Add some rotation
+                             enemy.mesh.rotation.y += deltaTime * 3;
+                             
+                             // Sink into ground
+                             enemy.mesh.position.y = Math.max(0, ENEMY_HEIGHT / 2 * scale - timeSinceDeath * 0.2);
+                         } else {
+                             // Remove from scene once animation complete
+                             scene.remove(enemy.mesh);
+                             enemy.isDisintegrating = false;
+                         }
+                     }
+                     return;
+                 }
+
+                 // Animate walking cycle
+                 if (enemy.state === 'patrol' || enemy.state === 'chase') {
+                     enemy.walkCycle += deltaTime * 5;
+                     
+                     // Leg movement
+                     if (enemy.leftLeg && enemy.rightLeg) {
+                         enemy.leftLeg.rotation.x = Math.sin(enemy.walkCycle) * 0.4;
+                         enemy.rightLeg.rotation.x = Math.sin(enemy.walkCycle + Math.PI) * 0.4;
+                     }
+                     
+                     // Arm movement
+                     if (enemy.leftArm && enemy.rightArm) {
+                         enemy.leftArm.rotation.x = Math.sin(enemy.walkCycle + Math.PI) * 0.3;
+                         enemy.rightArm.rotation.x = Math.sin(enemy.walkCycle) * 0.3;
+                     }
+                 } else {
+                     // Reset animations when not moving
+                     if (enemy.leftLeg) enemy.leftLeg.rotation.x = 0;
+                     if (enemy.rightLeg) enemy.rightLeg.rotation.x = 0;
+                     if (enemy.leftArm) enemy.leftArm.rotation.x = 0;
+                     if (enemy.rightArm) enemy.rightArm.rotation.x = 0;
+                 }
+
+                 // Don't move or attack during safe period
+                 if (isSafePeriod) return;
+                 
+                 // Update enemy AI and movement
+                 updateEnemyMovement(enemy, playerWorldPos, deltaTime, now);
+                 
+                 // Only attack if in attack state and cooldown is ready
+                 if (enemy.state === 'attack' && enemy.canSeePlayer && now - enemy.lastAttackTime >= ENEMY_ATTACK_COOLDOWN) {
+                     const enemyPos = enemy.mesh.position;
+                     
+                     // Attack origin and direction
+                     const rayOrigin = enemyPos.clone().add(new THREE.Vector3(0, ENEMY_HEIGHT * 0.7, 0));
+                     const rayDirection = playerWorldPos.clone().add(new THREE.Vector3(0, CAMERA_HEIGHT_OFFSET * 0.8, 0)).sub(rayOrigin).normalize();
+                     
+                     raycaster.set(rayOrigin, rayDirection);
+                     const objectsToCheck = environmentMeshes.concat(
+                         Array.from(playerContainer.children).filter(obj => obj.userData.isPlayerPart)
+                     );
+                     
+                     const intersects = raycaster.intersectObjects(objectsToCheck, false);
+                     
+                     // Only attack if the first hit is a player part
+                     if (intersects.length > 0) {
+                         const firstHit = intersects[0];
+                         
+                         if (firstHit.object.userData.isPlayerPart) {
+                             console.log("Enemy attacking player!");
+                             playerTakeDamage(ENEMY_DAMAGE);
+                             enemy.lastAttackTime = now; // Reset cooldown
+                             
+                             // Arm attacking animation
+                             if (enemy.rightArm) {
+                                 // Quick punch animation
+                                 enemy.rightArm.rotation.x = -0.8;
+                                 setTimeout(() => {
+                                     if (enemy.rightArm) enemy.rightArm.rotation.x = 0;
+                                 }, 200);
+                             }
+                         }
+                     }
+                 }
+             });
+        }
+        
+        // Update health kits (animation and collection)
+        function updateHealthKits(deltaTime) {
+            if (isGameOver) return;
+            const now = clock.getElapsedTime();
+            
+            // Get player position for collection detection
+            const playerPos = new THREE.Vector3();
+            playerContainer.getWorldPosition(playerPos);
+            playerPos.y = 0.5; // Adjust to match health kit height
+            
+            // Update player collision box
+            playerContainer.updateMatrixWorld(true);
+            const playerBox = playerContainer.userData.boundingBox;
+            const torsoBox = new THREE.Box3().setFromObject(playerTorsoMesh, true);
+            const headBox = new THREE.Box3().setFromObject(playerHeadMesh, true);
+            playerBox.copy(torsoBox).union(headBox);
+            
+            for (let i = healthKits.length - 1; i >= 0; i--) {
+                const kit = healthKits[i];
+                
+                // Update animation
+                if (kit.mesh) {
+                    // Rotate
+                    kit.mesh.rotation.y += deltaTime * kit.mesh.userData.rotationSpeed;
+                    
+                    // Bob up and down
+                    kit.mesh.userData.bob += deltaTime * 2;
+                    kit.mesh.position.y = 0.25 + Math.sin(kit.mesh.userData.bob) * 0.1;
+                    
+                    // Update bounding box
+                    kit.boundingBox.setFromObject(kit.mesh);
+                    
+                    // Check if player collected
+                    if (kit.boundingBox.intersectsBox(playerBox)) {
+                        // Heal player
+                        healPlayer();
+                        
+                        // Remove health kit
+                        scene.remove(kit.mesh);
+                        healthKits.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Check if expired
+                    if (now - kit.createdAt > HEALTH_KIT_LIFETIME) {
+                        // Fade out effect
+                        const fadeTime = Math.min(1, (now - kit.createdAt - HEALTH_KIT_LIFETIME + 1));
+                        if (fadeTime > 0.9) {
+                            scene.remove(kit.mesh);
+                            healthKits.splice(i, 1);
+                        } else {
+                            // Scale down as it's about to disappear
+                            const scale = 1 - fadeTime;
+                            kit.mesh.scale.set(scale, scale, scale);
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateCamera(forceImmediate = false) {
+            if (!playerContainer) return;
+            
+            if (isOverviewMode) {
+                // Overview camera positioning - top-down view
+                const playerPos = new THREE.Vector3();
+                playerContainer.getWorldPosition(playerPos);
+                
+                // Position the overview camera above the player
+                overviewCamera.position.set(
+                    playerPos.x, 
+                    OVERVIEW_CAMERA_HEIGHT, 
+                    playerPos.z + OVERVIEW_CAMERA_DISTANCE
+                );
+                
+                // Look directly at player from above
+                overviewCamera.lookAt(playerPos);
+                
+                // Use the overview camera for rendering
+                renderer.render(scene, overviewCamera);
+                return;
+            }
+            
+            // First-person camera mode (default, but moved back to see player)
+            const targetPosition = new THREE.Vector3();
+            playerContainer.getWorldPosition(targetPosition);
+            
+            // Position camera higher and behind player's head to see more of player
+            targetPosition.y = CAMERA_HEIGHT_OFFSET + FIRST_PERSON_HEIGHT_OFFSET;
+            
+            // Position further behind head in the direction player is facing
+            const headDirection = new THREE.Vector3();
+            playerContainer.getWorldDirection(headDirection);
+            headDirection.negate(); // Reverse direction (behind player)
+            headDirection.multiplyScalar(FIRST_PERSON_OFFSET);
+            
+            const desiredCamPos = targetPosition.clone().add(headDirection);
+            
+            if (forceImmediate || isGameOver) {
+                camera.position.copy(desiredCamPos);
+            } else {
+                camera.position.lerp(desiredCamPos, 0.25); // Smoother follow
+            }
+            
+            // Look in the direction the player is facing
+            const lookDirection = new THREE.Vector3();
+            playerContainer.getWorldDirection(lookDirection);
+            const lookTarget = camera.position.clone().add(lookDirection.multiplyScalar(10));
+            camera.lookAt(lookTarget);
+        }
+
+        // --- Resize Listener ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Start Game ---
+        init();
+
+        // Function to start the game (hide controls and start gameplay)
+        function startGame() {
+            controlsGuideElement.style.display = 'none';
+            toggleControlsBtn.style.display = 'block';
+            gameStarted = true;
+            
+            // Request pointer lock to start playing
+            document.body.requestPointerLock();
+        }
+        
+        // Toggle controls guide visibility
+        function toggleControlsGuide() {
+            if (controlsGuideElement.style.display === 'none') {
+                controlsGuideElement.style.display = 'block';
+                toggleControlsBtn.textContent = 'Hide Controls';
+                // Optional: pause the game or release pointer lock
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+            } else {
+                controlsGuideElement.style.display = 'none';
+                toggleControlsBtn.textContent = 'Show Controls';
+            }
+        }
+
+        // Check if enemy can see player
+        function checkEnemyVision(enemy, playerPos) {
+            const enemyPos = enemy.mesh.position.clone();
+            const distanceToPlayer = enemyPos.distanceTo(playerPos);
+            
+            // Check if player is within sight range
+            if (distanceToPlayer > ENEMY_SIGHT_RANGE) {
+                return false;
+            }
+            
+            // Get the direction the enemy is facing
+            const enemyForward = new THREE.Vector3(0, 0, 1);
+            enemyForward.applyQuaternion(enemy.mesh.quaternion);
+            
+            // Get direction to player
+            const directionToPlayer = playerPos.clone().sub(enemyPos).normalize();
+            
+            // Calculate dot product to get angle between facing direction and player
+            const dotProduct = enemyForward.dot(directionToPlayer);
+            
+            // Check if player is within field of view
+            // cos(angle) = dotProduct
+            // If angle is less than ENEMY_SIGHT_ANGLE/2, enemy can see player
+            if (dotProduct < Math.cos(ENEMY_SIGHT_ANGLE / 2)) {
+                return false;
+            }
+            
+            // Cast ray to check for obstacles between enemy and player
+            const rayOrigin = enemyPos.clone();
+            rayOrigin.y = ENEMY_HEIGHT * 0.7; // Eye level
+            
+            const rayDirection = directionToPlayer.clone();
+            raycaster.set(rayOrigin, rayDirection);
+            
+            // Check for hits against environment and player parts
+            const objectsToCheck = environmentMeshes.concat(
+                Array.from(playerContainer.children).filter(obj => obj.userData.isPlayerPart)
+            );
+            
+            const intersects = raycaster.intersectObjects(objectsToCheck, false);
+            
+            if (intersects.length > 0) {
+                // First hit should be a player part, not an environment object
+                return intersects[0].object.userData.isPlayerPart;
+            }
+            
+            return false;
+        }
+        
+        // Update enemy movement - used in updateEnemies
+        function updateEnemyMovement(enemy, playerPos, deltaTime, now) {
+            if (!enemy.isAlive) return;
+            
+            const enemyPos = enemy.mesh.position;
+            const distanceToPlayer = enemyPos.distanceTo(playerPos);
+            
+            // Check if enemy can see player
+            enemy.canSeePlayer = checkEnemyVision(enemy, playerPos);
+            
+            // Update AI state based on conditions
+            let newState = enemy.state;
+            
+            if (enemy.canSeePlayer) {
+                if (distanceToPlayer <= ENEMY_ATTACK_RANGE) {
+                    newState = 'attack';
+                } else {
+                    newState = 'chase';
+                }
+            } else {
+                // If lost sight of player, return to patrol after delay
+                if (enemy.state === 'chase' || enemy.state === 'attack') {
+                    if (now - enemy.lastStateChange > 3.0) {
+                        newState = 'patrol';
+                    }
+                }
+            }
+            
+            // State transition
+            if (newState !== enemy.state) {
+                enemy.state = newState;
+                enemy.lastStateChange = now;
+            }
+            
+            // Execute behavior based on state
+            switch (enemy.state) {
+                case 'patrol':
+                    // Update patrol timer
+                    enemy.patrolTimer += deltaTime * 0.5;
+                    
+                    // Calculate new patrol target in a circle around spawn
+                    const patrolX = enemy.spawnPosition.x + Math.cos(enemy.patrolTimer) * ENEMY_PATROL_RADIUS;
+                    const patrolZ = enemy.spawnPosition.z + Math.sin(enemy.patrolTimer) * ENEMY_PATROL_RADIUS;
+                    enemy.targetPosition.set(patrolX, 0, patrolZ);
+                    
+                    // Move towards patrol target
+                    moveEnemyTowardsTarget(enemy, enemy.targetPosition, ENEMY_MOVE_SPEED * 0.5, deltaTime);
+                    break;
+                    
+                case 'chase':
+                    // Chase player but stop before attack range
+                    moveEnemyTowardsTarget(enemy, playerPos, ENEMY_MOVE_SPEED, deltaTime);
+                    break;
+                    
+                case 'attack':
+                    // Face player but don't move closer
+                    const directionToPlayer = playerPos.clone().sub(enemyPos).normalize();
+                    directionToPlayer.y = 0; // Keep enemy upright
+                    const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
+                        new THREE.Vector3(0, 0, 1), 
+                        directionToPlayer
+                    );
+                    enemy.mesh.quaternion.slerp(targetQuaternion, ENEMY_TURN_SPEED * deltaTime);
+                    break;
+            }
+        }
+        
+        // Helper function to move enemy towards a target position
+        function moveEnemyTowardsTarget(enemy, targetPos, speed, deltaTime) {
+            const enemyPos = enemy.mesh.position;
+            
+            // Direction to target
+            const direction = new THREE.Vector3();
+            direction.subVectors(targetPos, enemyPos);
+            direction.y = 0; // Keep movement on ground plane
+            
+            // If very close to target, don't move
+            if (direction.lengthSq() < 0.1) return;
+            
+            // Normalize and scale by speed and delta time
+            direction.normalize();
+            
+            // Turn towards movement direction
+            const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 0, 1), 
+                direction
+            );
+            enemy.mesh.quaternion.slerp(targetQuaternion, ENEMY_TURN_SPEED * deltaTime);
+            
+            // Move enemy
+            const movement = direction.multiplyScalar(speed * deltaTime);
+            enemyPos.add(movement);
+            
+            // Update bounding box
+            enemy.boundingBox.setFromObject(enemy.mesh);
+            
+            // Simple collision handling to prevent enemies from overlapping with obstacles
+            for (const objBox of collisionBoxes) {
+                if (enemy.boundingBox.intersectsBox(objBox)) {
+                    // Move back
+                    enemyPos.sub(movement);
+                    enemy.boundingBox.setFromObject(enemy.mesh);
+                    break;
+                }
+            }
+            
+            // Prevent enemies from overlapping with other enemies
+            for (const otherEnemy of enemies) {
+                if (otherEnemy !== enemy && otherEnemy.isAlive) {
+                    if (enemy.boundingBox.intersectsBox(otherEnemy.boundingBox)) {
+                        // Move back
+                        enemyPos.sub(movement);
+                        enemy.boundingBox.setFromObject(enemy.mesh);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Update the controls guide with J and K keys
+        function updateControlsGuide() {
+            // Update control guide for K and J keys
+            const combatSection = controlsGuideElement.querySelector('.section:nth-child(2)');
+            
+            // Clear existing rows
+            while (combatSection.children.length > 2) {
+                combatSection.removeChild(combatSection.lastChild);
+            }
+            
+            // Add updated combat controls
+            const controls = [
+                {key: 'Left Click', action: 'Shoot 🔥'},
+                {key: 'J', action: 'Weapon Selection Wheel 🔄'},
+                {key: 'K', action: 'Toggle Room Overview (hold) 🔍'},
+                {key: '1-3', action: 'Quick Weapon Select'},
+                {key: 'R', action: 'Unstuck Player (if trapped) 🔓'}
+            ];
+            
+            controls.forEach(control => {
+                const row = document.createElement('div');
+                row.className = 'control-row';
+                row.innerHTML = `<span class="key">${control.key}</span> <span>${control.action}</span>`;
+                combatSection.appendChild(row);
+            });
+        }
+
+        // Check if level is complete and advance if needed
+        function checkLevelComplete() {
+            const aliveEnemies = enemies.filter(e => e.isAlive).length;
+            if (aliveEnemies === 0) {
+                // Advance to next level after a short delay
+                setTimeout(() => {
+                    currentLevel++;
+                    if (currentLevel < LEVELS.length) {
+                        loadLevel(currentLevel);
+                    } else {
+                        // Game completed - all levels done
+                        console.log("Game completed!");
+                        // TODO: Show victory screen
+                    }
+                }, 2000);
+            }
+        }
+
+        // Add the missing updateLevelInfo function
+        function updateLevelInfo() {
+            if (currentLevel < LEVELS.length) {
+                levelInfoElement.textContent = LEVELS[currentLevel].name;
+            } else {
+                levelInfoElement.textContent = "All Levels Complete!";
+            }
+        }
+    </script>
+</body>
+</html>
