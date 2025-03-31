@@ -210,6 +210,16 @@
              z-index: 30;
              display: none;
          }
+         
+         /* Enemy shield info tooltip */
+         #enemyShieldInfo {
+             position: absolute;
+             top: 70px;
+             left: 10px;
+             font-size: 14px;
+             color: #77aaff;
+             max-width: 250px;
+         }
     </style>
 </head>
 <body>
@@ -217,6 +227,7 @@
     <div id="weaponInfo" class="uiElement">Weapon: 1</div>
     <div id="enemyInfo" class="uiElement">Enemies Left: 0</div>
     <div id="playerHealthInfo" class="uiElement">Health: 100</div>
+    <div id="enemyShieldInfo" class="uiElement">💡 Enemies have shields! Attack from behind for full damage.</div>
     <div id="damageIndicator"></div>
     <div id="gameOverScreen">
         <div>GAME OVER</div>
@@ -245,6 +256,7 @@
             <div class="section-title">💡 Tips:</div>
             <div>Use obstacles for cover! 🏠</div>
             <div>Different weapons have different damage and fire rates</div>
+            <div style="margin-top: 10px; color: #77aaff;">Enemies have front shields! Attack from behind for full damage.</div>
         </div>
         
         <button id="startGameBtn">Start Game</button>
@@ -312,17 +324,19 @@
         const BULLET_SPEED_BASE = 20;
         const BULLET_LIFESPAN = 2;
 
-        const ENEMY_HEALTH_DEFAULT = 3;
+        // Enemy configuration
+        const ENEMY_HEALTH_DEFAULT = 5; // Increased from 3
         const ENEMY_RADIUS = 0.4;
         const ENEMY_HEIGHT = 1.5;
         const ENEMY_ATTACK_RANGE = 10.0;
         const ENEMY_ATTACK_COOLDOWN = 1.5; // seconds
-        const ENEMY_DAMAGE = 10;
+        const ENEMY_DAMAGE = 15; // Increased from 10
         const ENEMY_TURN_SPEED = 1.0; // Radians per second
-        const ENEMY_MOVE_SPEED = 2.5; // Movement speed
+        const ENEMY_MOVE_SPEED = 3.0; // Increased from 2.5
         const ENEMY_PATROL_RADIUS = 5.0; // How far enemies will patrol from their spawn
-        const ENEMY_SIGHT_RANGE = 12.0; // How far enemies can see
+        const ENEMY_SIGHT_RANGE = 15.0; // Increased from 12.0
         const ENEMY_SIGHT_ANGLE = Math.PI / 2; // Field of view (90 degrees)
+        const ENEMY_SHIELD_DAMAGE_REDUCTION = 0.3; // Front attacks only deal 30% damage
         
         // Level system
         const LEVELS = [
@@ -607,6 +621,14 @@
             const enemyMatDead = new THREE.MeshStandardMaterial({ color: 0x666666 }); // Darker Grey when dead
             const limbMatAlive = new THREE.MeshStandardMaterial({ color: 0xcc3333 }); // Darker red for limbs
             
+            // Shield material - semi-transparent blue
+            const shieldMat = new THREE.MeshStandardMaterial({ 
+                color: 0x4477ff, 
+                transparent: true, 
+                opacity: 0.5,
+                side: THREE.DoubleSide
+            });
+            
             // Torso
             const torsoGeo = new THREE.BoxGeometry(ENEMY_RADIUS * 1.5, ENEMY_HEIGHT * 0.5, ENEMY_RADIUS);
             const torsoMesh = new THREE.Mesh(torsoGeo, enemyMatAlive);
@@ -659,6 +681,13 @@
             const noseMesh = new THREE.Mesh(noseGeo, noseMat);
             noseMesh.position.set(0, ENEMY_HEIGHT * 0.75, ENEMY_RADIUS * 0.6);
             enemyGroup.add(noseMesh);
+            
+            // Add shield - half-cylinder in front of enemy
+            const shieldGeo = new THREE.CylinderGeometry(ENEMY_HEIGHT * 0.7, ENEMY_HEIGHT * 0.7, ENEMY_HEIGHT * 1.3, 16, 1, true, -Math.PI/3, Math.PI*2/3);
+            const shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+            shieldMesh.rotation.y = Math.PI / 2; // Rotate to face front
+            shieldMesh.position.set(0, ENEMY_HEIGHT * 0.5, 0.2); // Position in front of enemy
+            enemyGroup.add(shieldMesh);
 
             // Set position for the entire group
             enemyGroup.position.copy(position);
@@ -677,6 +706,7 @@
                 rightArm: rightArm,
                 leftLeg: leftLeg,
                 rightLeg: rightLeg,
+                shieldMesh: shieldMesh, // Store shield reference
                 health: ENEMY_HEALTH_DEFAULT,
                 boundingBox: boundingBox,
                 isAlive: true,
@@ -812,6 +842,22 @@
             // Change appearance
             enemy.mesh.material = enemy.materialDead;
             
+            // Disable shield - make it fade out
+            if (enemy.shieldMesh) {
+                // Fade out animation for shield
+                const fadeOutShield = () => {
+                    if (enemy.shieldMesh.material.opacity > 0.05) {
+                        enemy.shieldMesh.material.opacity -= 0.05;
+                        setTimeout(fadeOutShield, 50);
+                    } else {
+                        // Remove shield when fully transparent
+                        enemy.mesh.remove(enemy.shieldMesh);
+                        enemy.shieldMesh = null;
+                    }
+                };
+                fadeOutShield();
+            }
+            
             // Start death animation
             enemy.deathTime = clock.getElapsedTime();
             enemy.isDisintegrating = true;
@@ -824,6 +870,24 @@
             createHealthKit(enemy.mesh.position.clone());
         }
         
+        // Helper function to check if a position is inside any wall/obstacle
+        function isPositionInsideObstacle(position, radius = 0.5) {
+            // Create a temporary box to check collision
+            const tempBox = new THREE.Box3(
+                new THREE.Vector3(position.x - radius, 0, position.z - radius),
+                new THREE.Vector3(position.x + radius, 2, position.z + radius)
+            );
+            
+            // Check against all collision boxes
+            for (const objBox of collisionBoxes) {
+                if (tempBox.intersectsBox(objBox)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
         // Load a specific level
         function loadLevel(levelIndex) {
             // Clear any existing enemies
@@ -860,17 +924,61 @@
             // Get level config
             const level = LEVELS[levelIndex];
             
-            // Create environment for this level
+            // Create environment for this level first
             setupInitialEnvironment();
+            
+            // Find a safe position for the player
+            // Calculate a safe spawn position that's definitely inside the room
+            const MAX_ATTEMPTS = 20;
+            let playerSpawnFound = false;
+            let safePlayerPos = new THREE.Vector3();
+            
+            // Try different positions starting from the ideal one
+            for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                // Try different distances from the center
+                const distanceFromCenter = Math.min(level.roomSize/2 - 4, 7 - attempt * 0.5);
+                // Try different angles if needed
+                const angle = attempt * (Math.PI / 5);
+                
+                safePlayerPos.set(
+                    Math.sin(angle) * (attempt > 0 ? 2 : 0), // Only move away from center after first attempt
+                    0,
+                    distanceFromCenter
+                );
+                
+                // Check if this position is safe
+                if (!isPositionInsideObstacle(safePlayerPos, 1.0)) {
+                    playerSpawnFound = true;
+                    console.log(`Found safe player spawn at attempt ${attempt}:`, safePlayerPos);
+                    break;
+                }
+            }
+            
+            // If no safe position found, use a default position and log warning
+            if (!playerSpawnFound) {
+                console.warn("Could not find safe position for player! Using default position.");
+                safePlayerPos.set(0, 0, 5);
+            }
             
             // Spawn enemies for this level
             if (level.enemiesCanSpawnRandomly) {
                 // Spawn randomly
                 spawnRandomEnemies(level.enemyCount, level.roomSize);
             } else {
-                // Spawn at predefined positions
+                // Spawn at predefined positions, but verify they're safe
                 level.enemyPositions.forEach(pos => {
-                    createEnemy(pos);
+                    if (!isPositionInsideObstacle(pos, ENEMY_RADIUS)) {
+                        createEnemy(pos);
+                    } else {
+                        // Find a nearby safe position
+                        const safePos = findSafePositionNear(pos, ENEMY_RADIUS);
+                        if (safePos) {
+                            console.log("Moved enemy from unsafe to safe position");
+                            createEnemy(safePos);
+                        } else {
+                            console.warn("Could not find safe position for enemy, skipping");
+                        }
+                    }
                 });
             }
             
@@ -878,16 +986,36 @@
             updateLevelInfo();
             updateEnemyInfo();
             
-            // Reset player to starting position and clear velocity
-            // Calculate a safe spawn position that's definitely inside the room
-            const safeSpawnDistance = Math.min(level.roomSize/2 - 3, 8); // At least 3 units from wall, max 8 units
-            playerContainer.position.set(0, 0, safeSpawnDistance);
+            // Reset player to safe position and clear velocity
+            playerContainer.position.copy(safePlayerPos);
             playerVelocity.set(0, 0, 0);
             playerHealth = MAX_PLAYER_HEALTH;
             updatePlayerHealthUI();
             
             // Start safe period
             startSafePeriod();
+        }
+        
+        // Find a safe position near a given point
+        function findSafePositionNear(position, radius, maxAttempts = 10) {
+            // Try several positions in increasing distance
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                // Try different angles around the original position
+                for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+                    const distance = (attempt + 1) * 0.5; // Increase distance each attempt
+                    const testPos = new THREE.Vector3(
+                        position.x + Math.cos(angle) * distance,
+                        0,
+                        position.z + Math.sin(angle) * distance
+                    );
+                    
+                    if (!isPositionInsideObstacle(testPos, radius)) {
+                        return testPos;
+                    }
+                }
+            }
+            
+            return null; // No safe position found
         }
         
         // Spawn enemies at random valid positions
@@ -897,7 +1025,7 @@
             const minDistanceBetweenEnemies = ENEMY_RADIUS * 4; // Keep enemies from spawning too close
             
             const spawnPositions = [];
-            const playerSpawnPos = new THREE.Vector3(0, 0, Math.min(roomSize/2 - 3, 8));
+            const playerSpawnPos = playerContainer.position.clone(); // Use actual player position
             
             // Try to place the required number of enemies
             for (let i = 0; i < count; i++) {
@@ -932,33 +1060,26 @@
                         }
                     }
                     
-                    if (!tooClose) {
-                        // Check if position collides with obstacles
-                        // Create temporary bounding box
-                        const tempBox = new THREE.Box3(
-                            new THREE.Vector3(position.x - ENEMY_RADIUS, 0, position.z - ENEMY_RADIUS),
-                            new THREE.Vector3(position.x + ENEMY_RADIUS, ENEMY_HEIGHT, position.z + ENEMY_RADIUS)
-                        );
-                        
-                        let collides = false;
-                        for (const objBox of collisionBoxes) {
-                            if (tempBox.intersectsBox(objBox)) {
-                                collides = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!collides) {
-                            validPosition = true;
-                        }
+                    if (tooClose) {
+                        attempts++;
+                        continue;
                     }
                     
-                    attempts++;
+                    // Check if inside an obstacle
+                    if (isPositionInsideObstacle(position, ENEMY_RADIUS)) {
+                        attempts++;
+                        continue;
+                    }
+                    
+                    // All checks passed
+                    validPosition = true;
                 }
                 
                 if (validPosition) {
                     spawnPositions.push(position);
                     createEnemy(position);
+                } else {
+                    console.warn(`Failed to find valid position for enemy ${i} after 50 attempts`);
                 }
             }
             
@@ -1138,9 +1259,47 @@
         // Function to reset player position when stuck
         function resetPlayerPosition() {
             console.log("Player position reset requested");
-            const level = LEVELS[currentLevel];
-            const safePos = new THREE.Vector3(0, 0, level.roomSize/2 - 2);
-            playerContainer.position.copy(safePos);
+            
+            // First try to find a safe position nearby
+            const currentPos = playerContainer.position.clone();
+            const safePos = findSafePositionNear(currentPos, 1.0, 15);
+            
+            if (safePos) {
+                console.log("Found safe position near current position");
+                playerContainer.position.copy(safePos);
+            } else {
+                // If no nearby safe position, try more distant options
+                const level = LEVELS[currentLevel];
+                const MAX_ATTEMPTS = 20;
+                let safePlayerPos = new THREE.Vector3();
+                let playerSpawnFound = false;
+                
+                for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+                    const distanceFromCenter = Math.min(level.roomSize/2 - 4, 7 - attempt * 0.5);
+                    const angle = attempt * (Math.PI / 5);
+                    
+                    safePlayerPos.set(
+                        Math.sin(angle) * (attempt > 0 ? 2 : 0),
+                        0,
+                        distanceFromCenter
+                    );
+                    
+                    if (!isPositionInsideObstacle(safePlayerPos, 1.0)) {
+                        playerSpawnFound = true;
+                        console.log("Found safe fallback position");
+                        break;
+                    }
+                }
+                
+                if (!playerSpawnFound) {
+                    console.warn("No safe position found, using default");
+                    safePlayerPos.set(0, 0, 5);
+                }
+                
+                playerContainer.position.copy(safePlayerPos);
+            }
+            
+            // Reset velocity
             playerVelocity.set(0, 0, 0);
         }
 
@@ -1392,7 +1551,45 @@
                     if (!enemy.isAlive) continue;
                     if (userData.boundingBox.intersectsBox(enemy.boundingBox)) {
                         hit = true;
-                        enemy.health -= userData.damage; // Use weapon damage
+                        
+                        // Determine if hit is from front (shielded) or back
+                        const enemyForward = new THREE.Vector3(0, 0, 1);
+                        enemyForward.applyQuaternion(enemy.mesh.quaternion);
+                        
+                        // Get direction from enemy to bullet
+                        const bulletDir = bullet.position.clone().sub(enemy.mesh.position).normalize();
+                        bulletDir.y = 0; // Only consider horizontal direction
+                        
+                        // Calculate dot product to determine if bullet hit from front
+                        const dotProduct = enemyForward.dot(bulletDir);
+                        
+                        let actualDamage = userData.damage;
+                        
+                        // If hit from front (dot product positive), reduce damage due to shield
+                        if (dotProduct > 0) {
+                            actualDamage *= ENEMY_SHIELD_DAMAGE_REDUCTION;
+                            
+                            // Visual feedback - make shield flash
+                            if (enemy.shieldMesh) {
+                                const originalColor = enemy.shieldMesh.material.color.clone();
+                                enemy.shieldMesh.material.color.set(0xffffff);
+                                enemy.shieldMesh.material.opacity = 0.8;
+                                
+                                // Reset after flash
+                                setTimeout(() => {
+                                    if (enemy.shieldMesh) {
+                                        enemy.shieldMesh.material.color.copy(originalColor);
+                                        enemy.shieldMesh.material.opacity = 0.5;
+                                    }
+                                }, 100);
+                            }
+                            
+                            console.log("Shield hit! Reduced damage to:", actualDamage);
+                        } else {
+                            console.log("Back hit! Full damage:", actualDamage);
+                        }
+                        
+                        enemy.health -= actualDamage;
                         if (enemy.health <= 0) {
                             handleEnemyDeath(enemy);
                             enemyInfoNeedsUpdate = true;
